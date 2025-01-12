@@ -1,12 +1,10 @@
-﻿using System.Net.Sockets;
-
-namespace IzTestTask.Interfaces;
+﻿namespace IzTestTask.Interfaces;
 
 public interface ITcpClientWrapper : IDisposable
 {
     bool Connected { get; }
 
     Task ConnectAsync(string ipAddress, int port);
-    NetworkStream GetStream();
+    Stream GetStream();
     void Close();
 }

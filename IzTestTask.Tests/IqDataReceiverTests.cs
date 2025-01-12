@@ -16,7 +16,7 @@ public class IqDataReceiverTests : IDisposable
 
         // Act
         var listeningTask = _receiver.StartListeningAsync(cts.Token);
-        await Task.Delay(50); // Give some time for the file to be created
+        await Task.Delay(50, cts.Token); // Give some time for the file to be created
 
         // Assert
         Assert.True(File.Exists(TestFilePath));

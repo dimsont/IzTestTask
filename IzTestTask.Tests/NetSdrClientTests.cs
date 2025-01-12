@@ -1,10 +1,10 @@
 ﻿using System.Buffers.Binary;
-using System.Net.Sockets;
 using IzTestTask.Constants;
 using IzTestTask.Core;
 using IzTestTask.Enums;
 using IzTestTask.Exceptions;
 using IzTestTask.Interfaces;
+using IzTestTask.Tests.Helpers;
 using Moq;
 
 namespace IzTestTask.Tests;
@@ -12,53 +12,36 @@ namespace IzTestTask.Tests;
 public class NetSdrClientTests
 {
     private readonly Mock<ITcpClientWrapper> _tcpClientWrapperMock;
-    private readonly Mock<NetworkStream> _networkStreamMock;
+    private readonly MemoryStream _memoryStream;
     private readonly NetSdrClient _client;
     private readonly List<byte[]> _sentMessages;
 
-    public NetSdrClientTests()
+    public NetSdrClientTests(MemoryStream memoryStream, Mock<ITcpClientWrapper> tcpClientWrapperMock, NetSdrClient client)
     {
+        _memoryStream = memoryStream;
         _tcpClientWrapperMock = new Mock<ITcpClientWrapper>();
-        _networkStreamMock = new Mock<NetworkStream>(MockBehavior.Strict);
-        _sentMessages = new List<byte[]>();
+        _sentMessages = [];
 
-        // Setup mocked NetworkStream behavior
-        _networkStreamMock
-            .Setup(s => s.WriteAsync(It.IsAny<ReadOnlyMemory<byte>>(), It.IsAny<CancellationToken>()))
-            .Callback<ReadOnlyMemory<byte>, CancellationToken>((data, _) =>
-            {
-                _sentMessages.Add(data.ToArray());
-            })
-            .Returns(ValueTask.CompletedTask);
-
-        _tcpClientWrapperMock.Setup(c => c.GetStream()).Returns(_networkStreamMock.Object);
+        // Use the FakeNetworkStream
+        var fakeStream = new FakeNetworkStream();
+        _tcpClientWrapperMock.Setup(c => c.GetStream()).Returns(fakeStream);
         _tcpClientWrapperMock.SetupGet(c => c.Connected).Returns(true);
 
         _client = new NetSdrClient(_tcpClientWrapperMock.Object);
     }
 
-    private void SetupSuccessResponse()
+    public NetSdrClientTests(List<byte[]> sentMessages, Mock<ITcpClientWrapper> tcpClientWrapperMock, MemoryStream memoryStream, NetSdrClient client)
     {
-        var ackResponse = new byte[] { ProtocolConstants.AckResponse };
-        _networkStreamMock
-            .Setup(s => s.ReadAsync(It.IsAny<Memory<byte>>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Memory<byte> buffer, CancellationToken _) =>
-            {
-                ackResponse.CopyTo(buffer);
-                return ackResponse.Length;
-            });
+        _sentMessages = sentMessages;
+        _tcpClientWrapperMock = tcpClientWrapperMock;
+        _memoryStream = memoryStream;
+        _client = client;
     }
 
-    private void SetupNakResponse()
+    private void SetupResponse(byte[] response)
     {
-        var nakResponse = new byte[] { ProtocolConstants.NakResponse };
-        _networkStreamMock
-            .Setup(s => s.ReadAsync(It.IsAny<Memory<byte>>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Memory<byte> buffer, CancellationToken _) =>
-            {
-                nakResponse.CopyTo(buffer);
-                return nakResponse.Length;
-            });
+        _memoryStream.Write(response, 0, response.Length);
+        _memoryStream.Position = 0; // Reset position for reading.
     }
 
     [Fact]
@@ -79,7 +62,7 @@ public class NetSdrClientTests
     public async Task SetReceiverState_Start_ShouldSendCorrectMessage()
     {
         // Arrange
-        SetupSuccessResponse();
+        SetupResponse([ProtocolConstants.AckResponse]);
         await _client.ConnectAsync("127.0.0.1");
 
         // Act
@@ -97,7 +80,7 @@ public class NetSdrClientTests
     public async Task SetFrequency_ShouldSendCorrectMessage()
     {
         // Arrange
-        SetupSuccessResponse();
+        SetupResponse([ProtocolConstants.AckResponse]);
         await _client.ConnectAsync("127.0.0.1");
         const uint frequency = 144_000_000;
 
@@ -119,7 +102,7 @@ public class NetSdrClientTests
     public async Task Command_WhenReceivesNak_ShouldThrowException()
     {
         // Arrange
-        SetupNakResponse();
+        SetupResponse([ProtocolConstants.NakResponse]);
         await _client.ConnectAsync("127.0.0.1");
 
         // Act & Assert

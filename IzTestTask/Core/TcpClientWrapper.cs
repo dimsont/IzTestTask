@@ -14,7 +14,7 @@ public class TcpClientWrapper : ITcpClientWrapper
         await _tcpClient.ConnectAsync(ipAddress, port).ConfigureAwait(false);
     }
 
-    public NetworkStream GetStream()
+    public Stream GetStream()
     {
         return _tcpClient.GetStream();
     }

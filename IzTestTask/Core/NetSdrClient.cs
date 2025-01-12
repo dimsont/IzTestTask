@@ -4,13 +4,12 @@ using IzTestTask.Interfaces;
 using System.Buffers.Binary;
 using IzTestTask.Enums;
 using IzTestTask.Models;
-using System.Net.Sockets;
 
 namespace IzTestTask.Core;
 
 public class NetSdrClient(ITcpClientWrapper tcpClientWrapper) : INetSdrClient
 {
-    private NetworkStream? _networkStream;
+    private Stream? _networkStream;
 
     public async Task ConnectAsync(string ipAddress, int port = ProtocolConstants.Ports.DefaultTcp)
     {

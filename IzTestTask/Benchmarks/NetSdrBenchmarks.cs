@@ -69,7 +69,7 @@ public class NetSdrBenchmarks
 
         while (processed < _mockIqData.Length)
         {
-            await ms.ReadAsync(buffer).ConfigureAwait(false);
+            var readAsync = await ms.ReadAsync(buffer).ConfigureAwait(false);
             // Process I/Q sample (2 bytes each)
             var iSample = BitConverter.ToInt16(buffer, 0);
             var qSample = BitConverter.ToInt16(buffer, 2);
