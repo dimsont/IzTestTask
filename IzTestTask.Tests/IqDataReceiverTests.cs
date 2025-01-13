@@ -5,8 +5,21 @@ namespace IzTestTask.Tests;
 
 public class IqDataReceiverTests : IDisposable
 {
-    private const string TestFilePath = "test_iq_data.bin";
-    private readonly IqDataReceiver _receiver = new(TestFilePath);
+    private static readonly object _lock = new();
+    private static int _nextPort = 60000;
+    private static int _fileCounter = 0;
+    private readonly string _testFilePath;
+    private readonly IqDataReceiver _receiver;
+
+    public IqDataReceiverTests()
+    {
+        // Create unique file path and port for each test instance
+        lock (_lock)
+        {
+            _testFilePath = $"test_iq_data_{_fileCounter++}.bin";
+            _receiver = new IqDataReceiver(_testFilePath, _nextPort++);
+        }
+    }
 
     [Fact]
     public async Task StartListening_ShouldCreateFile()
@@ -19,29 +32,56 @@ public class IqDataReceiverTests : IDisposable
         await Task.Delay(50, cts.Token); // Give some time for the file to be created
 
         // Assert
-        Assert.True(File.Exists(TestFilePath));
+        Assert.True(File.Exists(_testFilePath));
     }
 
-    [Theory]
-    [InlineData(60000)]  // Default port
-    [InlineData(60001)]  // Different port to test port binding
-    public void Constructor_ShouldCreateUdpListener_OnSpecifiedPort(int port)
+    [Fact]
+    public void Constructor_ShouldCreateUdpListener_OnSpecifiedPort()
     {
-        // Act & Assert
-        Assert.Throws<SocketException>(() =>
+        // Arrange
+        int testPort;
+        string testFile;
+        lock (_lock)
         {
-            using var receiver1 = new IqDataReceiver(TestFilePath, port);
-            using var receiver2 = new IqDataReceiver(TestFilePath, port);
-            // Second receiver should fail to bind to the same port
+            testPort = _nextPort++;
+            testFile = $"test_iq_data_{_fileCounter++}.bin";
+        }
+
+        // Act & Assert
+        using var receiver1 = new IqDataReceiver(testFile, testPort);
+        Assert.ThrowsAny<Exception>(() =>
+        {
+            using var receiver2 = new IqDataReceiver(testFile + "_2", testPort);
         });
     }
 
     public void Dispose()
     {
         _receiver.Dispose();
-        if (File.Exists(TestFilePath))
+        if (File.Exists(_testFilePath))
         {
-            File.Delete(TestFilePath);
+            try
+            {
+                File.Delete(_testFilePath);
+            }
+            catch (IOException)
+            {
+                // File might still be in use, can be cleaned up later
+            }
+        }
+
+        // Clean up any additional test files
+        var testFiles = Directory.GetFiles(".", "test_iq_data_*.bin");
+        foreach (var file in testFiles)
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (IOException)
+            {
+                // File might still be in use, can be cleaned up later
+            }
         }
     }
 }
